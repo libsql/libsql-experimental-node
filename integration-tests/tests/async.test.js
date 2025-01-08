@@ -328,6 +328,23 @@ test.serial("Database.interrupt()", async (t) => {
   });
 });
 
+test.serial("Concurrent writes over same connection", async (t) => {
+  const db = t.context.db;
+  await db.exec(`
+    DROP TABLE IF EXISTS users;
+    CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, email TEXT)
+  `);
+  const stmt = await db.prepare("INSERT INTO users(name, email) VALUES (:name, :email)");
+  const promises = [];
+  for (let i = 0; i < 1000; i++) {
+    promises.push(stmt.run({ name: "Alice", email: "alice@example.org" }));
+  }
+  await Promise.all(promises);
+  const stmt2 = await db.prepare("SELECT * FROM users ORDER BY name");
+  const rows = await stmt2.all();
+  t.is(rows.length, 1000);
+});
+
 const connect = async (path_opt) => {
   const path = path_opt ?? "hello.db";
   const provider = process.env.PROVIDER;
